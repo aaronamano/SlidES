@@ -4,28 +4,17 @@ import os
 
 load_dotenv()
 
-# Initialize Elasticsearch client
 client = Elasticsearch(
     str(os.getenv('ELASTICSEARCH_URL')),
     api_key=str(os.getenv('ELASTICSEARCH_API_KEY'))
 )
 
-index_name = "lecture-slides-index"
+index_name = "courses-index"
 
 mappings = {
     "properties": {
         "course_id": { "type": "keyword" },
-        "filename": { "type": "keyword" },
-        "title": { "type": "text" },
-        "text_content": { "type": "text" },
-        "text_embedding": { "type": "sparse_vector" },
-        "pdf_binary": { 
-            "type": "binary", 
-            "store": True,
-            "doc_values": False 
-        },
-        "pdf_size": { "type": "long" },
-        "has_binary": { "type": "boolean" }
+        "course_name": { "type": "text" }
     }
 }
 

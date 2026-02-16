@@ -23,6 +23,7 @@ type TabType = "slides" | "upload" | "addCourse" | "notes" | "chatHistory";
 
 interface SlideData {
   id: string;
+  course_id: string;
   title: string;
   filename: string;
   has_binary?: boolean;
@@ -58,7 +59,9 @@ export default function Home() {
 
   const [courses, setCourses] = useState<CourseWithSlides[]>([]);
   const [slidesData, setSlidesData] = useState<{ [key: string]: SlideData[] }>({});
+  const [uncategorizedSlides, setUncategorizedSlides] = useState<SlideData[]>([]);
   const [pdfDataUrls, setPdfDataUrls] = useState<{ [key: string]: string }>({});
+  const [assigningSlide, setAssigningSlide] = useState<{ slideId: string; title: string } | null>(null);
 
   const [uploadForm, setUploadForm] = useState({
     title: "",
@@ -70,6 +73,9 @@ export default function Home() {
     id: "",
     name: ""
   });
+  const [editingCourse, setEditingCourse] = useState<string | null>(null);
+  const [editCourseId, setEditCourseId] = useState("");
+  const [editCourseName, setEditCourseName] = useState("");
 
   const [notes, setNotes] = useState<NoteResponse[]>([]);
   const [notesLoading, setNotesLoading] = useState(false);
@@ -105,6 +111,9 @@ export default function Home() {
     }
     if (activeTab === "chatHistory") {
       fetchConversations();
+    }
+    if (activeTab === "slides") {
+      fetchUncategorizedSlides();
     }
   }, [activeTab]);
 
@@ -175,6 +184,17 @@ export default function Home() {
     setExpandedSlides(newExpanded);
   };
 
+  const fetchUncategorizedSlides = async () => {
+    try {
+      const allSlides = await apiService.getAllSlides();
+      const uncategorized = (allSlides.slides || []).filter((slide: SlideData) => !slide.course_id);
+      setUncategorizedSlides(uncategorized);
+    } catch (err) {
+      console.error('Failed to fetch uncategorized slides:', err);
+      setUncategorizedSlides([]);
+    }
+  };
+
   const handleAddCourse = async () => {
     if (!courseForm.id || !courseForm.name) {
       setError("Please fill in all fields");
@@ -197,9 +217,65 @@ export default function Home() {
     }
   };
 
+  const handleUpdateCourse = async (oldCourseId: string) => {
+    if (!editCourseName.trim()) {
+      setError("Course name cannot be empty");
+      return;
+    }
+    if (!editCourseId.trim()) {
+      setError("Course ID cannot be empty");
+      return;
+    }
+
+    const isIdChanged = oldCourseId !== editCourseId;
+
+    try {
+      setError(null);
+      setSuccess(null);
+      await apiService.updateCourse(oldCourseId, { 
+        course_id: editCourseId, 
+        course_name: editCourseName 
+      });
+      setSuccess("Course updated successfully!");
+      setEditingCourse(null);
+      setEditCourseId("");
+      setEditCourseName("");
+      await fetchCourses();
+      await fetchSlidesForCourse(editCourseId);
+      if (isIdChanged) {
+        await fetchUncategorizedSlides();
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to update course");
+    }
+  };
+
+  const handleDeleteCourse = async (courseId: string) => {
+    if (!confirm("Are you sure you want to delete this course? Slides will be moved to Uncategorized.")) {
+      return;
+    }
+
+    try {
+      setError(null);
+      setSuccess(null);
+      await apiService.deleteCourse(courseId);
+      setSuccess("Course deleted successfully!");
+      await fetchCourses();
+      await fetchUncategorizedSlides();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to delete course");
+    }
+  };
+
+  const startEditingCourse = (courseId: string, courseName: string) => {
+    setEditingCourse(courseId);
+    setEditCourseId(courseId);
+    setEditCourseName(courseName);
+  };
+
   const handleUpload = async () => {
-    if (!uploadForm.title || !uploadForm.courseId || !uploadForm.pdfFile) {
-      setError("Please fill in all fields and select a file");
+    if (!uploadForm.title || !uploadForm.pdfFile) {
+      setError("Please fill in title and select a file");
       return;
     }
 
@@ -208,15 +284,17 @@ export default function Home() {
       setSuccess(null);
       await apiService.uploadPdf(
         uploadForm.pdfFile,
-        uploadForm.courseId,
+        uploadForm.courseId || null,
         courses.find(c => c.id === uploadForm.courseId)?.name || "",
         uploadForm.title
       );
       
       setSuccess("Slide uploaded successfully!");
       setUploadForm({ title: "", courseId: "", pdfFile: null });
-      if (expandedCourses.has(uploadForm.courseId)) {
+      if (uploadForm.courseId && expandedCourses.has(uploadForm.courseId)) {
         await fetchSlidesForCourse(uploadForm.courseId);
+      } else {
+        await fetchUncategorizedSlides();
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to upload file");
@@ -482,9 +560,32 @@ export default function Home() {
       setSuccess(null);
       await apiService.deleteSlide(documentId);
       setSuccess("Slide deleted successfully!");
-      await fetchSlidesForCourse(courseId);
+      if (courseId) {
+        await fetchSlidesForCourse(courseId);
+      } else {
+        await fetchUncategorizedSlides();
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to delete slide");
+    }
+  };
+
+  const handleAssignSlide = async (slideId: string, courseId: string) => {
+    if (!courseId) {
+      setError("Please select a course");
+      return;
+    }
+
+    try {
+      setError(null);
+      setSuccess(null);
+      await apiService.updateSlideCourseId(slideId, courseId);
+      setSuccess("Slide assigned to course!");
+      setAssigningSlide(null);
+      await fetchUncategorizedSlides();
+      await fetchSlidesForCourse(courseId);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to assign slide");
     }
   };
 
@@ -629,7 +730,96 @@ export default function Home() {
 
         {activeTab === "slides" && (
           <div className="space-y-4">
-            {courses.length === 0 ? (
+            {uncategorizedSlides.length > 0 && (
+              <Card style={{ backgroundColor: "oklch(0.15 0 0)", borderColor: "oklch(1 0 0 / 10%)" }}>
+                <CardHeader>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <CardTitle style={{ color: "oklch(0.985 0 0)" }}>Uncategorized Slides</CardTitle>
+                      <CardDescription className="text-muted-foreground">Slides without a course</CardDescription>
+                    </div>
+                    <Badge style={{ backgroundColor: "#6B21A8", color: "white" }}>
+                      {uncategorizedSlides.length} slides
+                    </Badge>
+                  </div>
+                </CardHeader>
+                <Separator />
+                <CardContent className="pt-4">
+                  <div className="space-y-3">
+                    {uncategorizedSlides.map((slide: SlideData, index: number) => (
+                      <div 
+                        key={slide.id || index} 
+                        className="rounded-lg border overflow-hidden"
+                        style={{ borderColor: "oklch(1 0 0 / 10%)" }}
+                      >
+                        <button
+                          onClick={() => toggleSlide(`uncategorized-${slide.id || index}`, slide.id, slide.has_binary || false)}
+                          className="w-full px-4 py-3 flex items-center justify-between hover:bg-muted/30 transition-colors"
+                        >
+                          <span className="text-sm" style={{ color: "oklch(0.9 0 0)" }}>{slide.title}</span>
+                          <span className="text-muted-foreground text-xs">
+                            {expandedSlides.has(`uncategorized-${slide.id || index}`) ? "▼" : "▶"}
+                          </span>
+                        </button>
+                        
+                        {expandedSlides.has(`uncategorized-${slide.id || index}`) && (
+                          <div className="p-4 border-t" style={{ borderColor: "oklch(1 0 0 / 10%)", backgroundColor: "oklch(0.1 0 0)" }}>
+                            <div className="flex items-center justify-between mb-4">
+                              <div className="text-sm text-muted-foreground">{slide.filename}</div>
+                              <div className="flex items-center space-x-3">
+                                <Button
+                                  size="sm"
+                                  onClick={() => setAssigningSlide({ slideId: slide.id, title: slide.title })}
+                                  style={{ backgroundColor: "#0B64DD" }}
+                                >
+                                  Assign to Course
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  onClick={() => handleDeleteSlide(slide.id, '')}
+                                  style={{ backgroundColor: "#C61E25" }}
+                                >
+                                  Delete
+                                </Button>
+                              </div>
+                            </div>
+                            
+                            <div 
+                              className="rounded-lg overflow-hidden border"
+                              style={{ borderColor: "oklch(1 0 0 / 10%)" }}
+                            >
+                              <div className="h-96">
+                                {(slide.has_binary && pdfDataUrls[slide.id]) ? (
+                                  <iframe
+                                    src={pdfDataUrls[slide.id]}
+                                    className="w-full h-full"
+                                    title={slide.title}
+                                  />
+                                ) : slide.has_binary ? (
+                                  <div className="flex items-center justify-center h-full text-muted-foreground">
+                                    <div className="text-center">
+                                      <div className="text-lg mb-2">Loading PDF...</div>
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <iframe
+                                    src={`http://localhost:8001/api/files/${slide.filename}`}
+                                    className="w-full h-full"
+                                    title={slide.title}
+                                  />
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {courses.length === 0 && uncategorizedSlides.length === 0 ? (
               <Card style={{ backgroundColor: "oklch(0.15 0 0)", borderColor: "oklch(1 0 0 / 10%)" }}>
                 <CardContent className="pt-6 text-center">
                   <div className="text-muted-foreground">No courses found. Add a course to get started.</div>
@@ -786,7 +976,7 @@ export default function Home() {
                 
                 <div>
                   <label className="block text-sm font-medium mb-2" style={{ color: "oklch(0.9 0 0)" }}>
-                    Course
+                    Course (Optional)
                   </label>
                   <select
                     value={uploadForm.courseId}
@@ -794,7 +984,7 @@ export default function Home() {
                     className="w-full px-3 py-2 rounded-md border bg-background text-foreground"
                     style={{ borderColor: "oklch(1 0 0 / 15%)" }}
                   >
-                    <option value="">Select a course</option>
+                    <option value="">No Course</option>
                     {courses.map((course) => (
                       <option key={course.id} value={course.id}>
                         {course.name} ({course.id})
@@ -833,7 +1023,7 @@ export default function Home() {
                 
                 <Button
                   onClick={handleUpload}
-                  disabled={!uploadForm.title || !uploadForm.courseId || !uploadForm.pdfFile}
+                  disabled={!uploadForm.title || !uploadForm.pdfFile}
                   className="w-full"
                   style={{ backgroundColor: "#BC1E70" }}
                 >
@@ -848,40 +1038,130 @@ export default function Home() {
           <div className="space-y-4 max-w-xl">
             <Card style={{ backgroundColor: "oklch(0.15 0 0)", borderColor: "oklch(1 0 0 / 10%)" }}>
               <CardContent className="pt-6 space-y-4">
-                <div>
-                  <label className="block text-sm font-medium mb-2" style={{ color: "oklch(0.9 0 0)" }}>
-                    Course ID
-                  </label>
-                  <Input
-                    type="text"
-                    value={courseForm.id}
-                    onChange={(e) => setCourseForm({ ...courseForm, id: e.target.value })}
-                    placeholder="e.g., CS101"
-                  />
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium mb-2" style={{ color: "oklch(0.9 0 0)" }}>
-                    Course Name
-                  </label>
-                  <Input
-                    type="text"
-                    value={courseForm.name}
-                    onChange={(e) => setCourseForm({ ...courseForm, name: e.target.value })}
-                    placeholder="e.g., Introduction to Computer Science"
-                  />
-                </div>
-                
-                <Button
-                  onClick={handleAddCourse}
-                  disabled={!courseForm.id || !courseForm.name}
-                  className="w-full"
-                  style={{ backgroundColor: "#008B87" }}
-                >
-                  Add Course
-                </Button>
+                {editingCourse ? (
+                  <>
+                    <div>
+                      <label className="block text-sm font-medium mb-2" style={{ color: "oklch(0.9 0 0)" }}>
+                        Course ID
+                      </label>
+                      <Input
+                        type="text"
+                        value={editCourseId}
+                        onChange={(e) => setEditCourseId(e.target.value)}
+                        placeholder="e.g., CS101"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium mb-2" style={{ color: "oklch(0.9 0 0)" }}>
+                        Course Name
+                      </label>
+                      <Input
+                        type="text"
+                        value={editCourseName}
+                        onChange={(e) => setEditCourseName(e.target.value)}
+                        placeholder="e.g., Introduction to Computer Science"
+                      />
+                    </div>
+                    <div className="flex space-x-2">
+                      <Button
+                        onClick={() => handleUpdateCourse(editingCourse)}
+                        className="flex-1"
+                        style={{ backgroundColor: "#008B87" }}
+                      >
+                        Save Changes
+                      </Button>
+                      <Button
+                        variant="outline"
+                        onClick={() => {
+                          setEditingCourse(null);
+                          setEditCourseId("");
+                          setEditCourseName("");
+                        }}
+                        className="flex-1"
+                      >
+                        Cancel
+                      </Button>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div>
+                      <label className="block text-sm font-medium mb-2" style={{ color: "oklch(0.9 0 0)" }}>
+                        Course ID
+                      </label>
+                      <Input
+                        type="text"
+                        value={courseForm.id}
+                        onChange={(e) => setCourseForm({ ...courseForm, id: e.target.value })}
+                        placeholder="e.g., CS101"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium mb-2" style={{ color: "oklch(0.9 0 0)" }}>
+                        Course Name
+                      </label>
+                      <Input
+                        type="text"
+                        value={courseForm.name}
+                        onChange={(e) => setCourseForm({ ...courseForm, name: e.target.value })}
+                        placeholder="e.g., Introduction to Computer Science"
+                      />
+                    </div>
+                    <Button
+                      onClick={handleAddCourse}
+                      disabled={!courseForm.id || !courseForm.name}
+                      className="w-full"
+                      style={{ backgroundColor: "#008B87" }}
+                    >
+                      Add Course
+                    </Button>
+                  </>
+                )}
               </CardContent>
             </Card>
+
+            {courses.length > 0 && (
+              <Card style={{ backgroundColor: "oklch(0.15 0 0)", borderColor: "oklch(1 0 0 / 10%)" }}>
+                <CardHeader>
+                  <CardTitle style={{ color: "oklch(0.985 0 0)" }}>Existing Courses</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-2">
+                  {courses.map((course) => (
+                    <div 
+                      key={course.id}
+                      className="flex items-center justify-between p-3 rounded-lg"
+                      style={{ backgroundColor: "oklch(0.1 0 0)", borderColor: "oklch(1 0 0 / 10%)", border: "1px solid" }}
+                    >
+                      <div>
+                        <div className="font-medium" style={{ color: "oklch(0.9 0 0)" }}>{course.name}</div>
+                        <div className="text-sm text-muted-foreground">{course.id}</div>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => startEditingCourse(course.id, course.name)}
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                          </svg>
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => handleDeleteCourse(course.id)}
+                          style={{ color: "#C61E25" }}
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
+            )}
           </div>
         )}
 
@@ -1409,6 +1689,53 @@ export default function Home() {
         >
           <AgentChat key={selectedConversationId || 'new-chat'} initialMessages={selectedConversationMessages} conversationId={selectedConversationId} />
         </div>
+      )}
+
+      {assigningSlide && (
+        <Dialog open={true} onOpenChange={() => setAssigningSlide(null)}>
+          <DialogContent style={{ backgroundColor: "oklch(0.15 0 0)" }}>
+            <DialogHeader>
+              <DialogTitle style={{ color: "oklch(0.985 0 0)" }}>Assign Slide to Course</DialogTitle>
+              <DialogDescription className="text-muted-foreground">
+                Select a course to assign &quot;{assigningSlide.title}&quot; to
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+              <select
+                id="assign-course-select"
+                className="w-full px-3 py-2 rounded-md border bg-background text-foreground"
+                style={{ borderColor: "oklch(1 0 0 / 15%)" }}
+                defaultValue=""
+              >
+                <option value="" disabled>Select a course</option>
+                {courses.map((course) => (
+                  <option key={course.id} value={course.id}>
+                    {course.name} ({course.id})
+                  </option>
+                ))}
+              </select>
+              <div className="flex space-x-2">
+                <Button
+                  onClick={() => {
+                    const select = document.getElementById('assign-course-select') as HTMLSelectElement;
+                    handleAssignSlide(assigningSlide.slideId, select.value);
+                  }}
+                  className="flex-1"
+                  style={{ backgroundColor: "#008B87" }}
+                >
+                  Assign
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => setAssigningSlide(null)}
+                  className="flex-1"
+                >
+                  Cancel
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
       )}
       </div>
     </div>

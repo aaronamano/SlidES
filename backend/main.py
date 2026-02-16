@@ -94,11 +94,39 @@ async def get_slides_by_course(course_id: str):
         for hit in response['hits']['hits']:
             slides.append({
                 "id": hit['_id'],
-                "course_id": hit['_source']['course_id'],
-                "course_name": hit['_source']['course_name'],
-                "filename": hit['_source']['filename'],
-                "title": hit['_source']['title'],
-                "text_content": hit['_source']['text_content'],
+                "course_id": hit['_source'].get('course_id', ''),
+                "filename": hit['_source'].get('filename', ''),
+                "title": hit['_source'].get('title', ''),
+                "text_content": hit['_source'].get('text_content', ''),
+                "has_binary": hit['_source'].get('has_binary', False)
+            })
+            
+        return {"slides": slides, "total": len(slides)}
+        
+    except Exception as e:
+        return {"error": f"Failed to retrieve slides: {str(e)}"}
+
+@app.get("/api/slides")
+async def get_all_slides():
+    """Get all slides regardless of course"""
+    try:
+        response = client.search(
+            index=index_name,
+            body={
+                "query": {
+                    "match_all": {}
+                }
+            }
+        )
+        
+        slides = []
+        for hit in response['hits']['hits']:
+            slides.append({
+                "id": hit['_id'],
+                "course_id": hit['_source'].get('course_id', ''),
+                "filename": hit['_source'].get('filename', ''),
+                "title": hit['_source'].get('title', ''),
+                "text_content": hit['_source'].get('text_content', ''),
                 "has_binary": hit['_source'].get('has_binary', False)
             })
             
@@ -110,15 +138,13 @@ async def get_slides_by_course(course_id: str):
 @app.post("/api/upload")
 async def upload_pdf(
     file: UploadFile = File(...),
-    course_id: str = Form(...),
-    course_name: str = Form(...),
+    course_id: str = Form(""),
+    course_name: str = Form(""),
     title: str = Form(...)
 ):
     try:
         pdf_content = await file.read()
         pdf_size = len(pdf_content)
-        
-
         
         # Convert PDF to Base64 for Elasticsearch storage
         pdf_binary = base64.b64encode(pdf_content).decode('utf-8')
@@ -130,8 +156,7 @@ async def upload_pdf(
             text_content += page.extract_text()
         
         doc = {
-            "course_id": course_id,
-            "course_name": course_name,
+            "course_id": course_id or "",
             "filename": file.filename,
             "title": title,
             "text_content": text_content,
@@ -145,8 +170,8 @@ async def upload_pdf(
         return {
             "message": "PDF uploaded and processed successfully",
             "document_id": response['_id'],
-            "course_id": course_id,
-            "course_name": course_name,
+            "course_id": course_id or "",
+            "course_name": course_name or "",
             "title": title,
             "filename": file.filename,
             "pdf_size": pdf_size,
@@ -163,7 +188,7 @@ async def upload_pdf(
 async def get_all_courses():
     """Get all courses"""
     try:
-        return await course_service.get_all_courses()
+        return course_service.get_all_courses()
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -171,7 +196,7 @@ async def get_all_courses():
 async def get_course_by_id(course_id: str):
     """Get a specific course by course_id"""
     try:
-        course = await course_service.get_course_by_id(course_id)
+        course = course_service.get_course_by_id(course_id)
         if not course:
             raise HTTPException(status_code=404, detail="Course not found")
         return course
@@ -184,7 +209,7 @@ async def get_course_by_id(course_id: str):
 async def create_course(course: CourseCreate):
     """Create a new course"""
     try:
-        return await course_service.create_course(course)
+        return course_service.create_course(course)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
@@ -194,7 +219,7 @@ async def create_course(course: CourseCreate):
 async def update_course(course_id: str, course_update: CourseUpdate):
     """Update an existing course"""
     try:
-        course = await course_service.update_course(course_id, course_update)
+        course = course_service.update_course(course_id, course_update)
         if not course:
             raise HTTPException(status_code=404, detail="Course not found")
         return course
@@ -207,7 +232,7 @@ async def update_course(course_id: str, course_update: CourseUpdate):
 async def delete_course(course_id: str):
     """Delete a course"""
     try:
-        success = await course_service.delete_course(course_id)
+        success = course_service.delete_course(course_id)
         if not success:
             raise HTTPException(status_code=404, detail="Course not found")
         return {"message": "Course deleted successfully"}
@@ -220,7 +245,7 @@ async def delete_course(course_id: str):
 async def get_courses_for_dropdown():
     """Get courses formatted for dropdown options"""
     try:
-        return await course_service.get_courses_for_dropdown()
+        return course_service.get_courses_for_dropdown()
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -351,6 +376,30 @@ async def delete_slide(document_id: str):
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to delete slide: {str(e)}")
+
+@app.put("/api/slides/{document_id}/course")
+async def update_slide_course(document_id: str, course_update: dict):
+    """Update a slide's course_id"""
+    try:
+        course_id = course_update.get("course_id", "")
+        
+        # Get current slide data
+        response = client.get(index=index_name, id=document_id)
+        if not response['found']:
+            raise HTTPException(status_code=404, detail="Slide not found")
+        
+        # Update the course_id
+        doc = response['_source']
+        doc['course_id'] = course_id
+        
+        client.index(index=index_name, id=document_id, document=doc)
+        
+        return {"message": "Slide course updated successfully", "document_id": document_id, "course_id": course_id}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to update slide course: {str(e)}")
     
 if __name__ == "__main__":
     import uvicorn

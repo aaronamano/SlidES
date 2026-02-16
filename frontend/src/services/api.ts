@@ -1,4 +1,4 @@
-const API_BASE_URL = process.env.FASTAPI_URL;
+const API_BASE_URL = process.env.FASTAPI_URL || "http://localhost:8000";
 
 export interface Course {
   id: string;
@@ -117,15 +117,19 @@ class ApiService {
   }
 
   // Slides API methods
-  async getSlidesByCourse(courseId: string): Promise<{ slides: Array<{ id: string; course_id: string; course_name: string; filename: string; title: string; text_content: string }>, total: number }> {
+  async getSlidesByCourse(courseId: string): Promise<{ slides: Array<{ id: string; course_id: string; filename: string; title: string; text_content: string; has_binary?: boolean }>, total: number }> {
     return this.request(`/api/slides/${courseId}`);
   }
 
-  async uploadPdf(file: File, courseId: string, courseName: string, title: string): Promise<{ message: string; document_id: string; course_id: string; course_name: string; title: string; filename: string }> {
+  async getAllSlides(): Promise<{ slides: Array<{ id: string; course_id: string; filename: string; title: string; text_content: string; has_binary?: boolean }>, total: number }> {
+    return this.request('/api/slides');
+  }
+
+  async uploadPdf(file: File, courseId: string | null, courseName: string, title: string): Promise<{ message: string; document_id: string; course_id: string; course_name: string; title: string; filename: string }> {
     const formData = new FormData();
     formData.append('file', file);
-    formData.append('course_id', courseId);
-    formData.append('course_name', courseName);
+    formData.append('course_id', courseId || '');
+    formData.append('course_name', courseName || '');
     formData.append('title', title);
 
     const response = await fetch(`${API_BASE_URL}/api/upload`, {
@@ -202,6 +206,13 @@ class ApiService {
   async deleteSlide(documentId: string): Promise<{ message: string }> {
     return this.request<{ message: string }>(`/api/slides/${documentId}`, {
       method: 'DELETE',
+    });
+  }
+
+  async updateSlideCourseId(documentId: string, courseId: string): Promise<{ message: string }> {
+    return this.request<{ message: string }>(`/api/slides/${documentId}/course`, {
+      method: 'PUT',
+      body: JSON.stringify({ course_id: courseId }),
     });
   }
 
