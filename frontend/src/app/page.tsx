@@ -819,7 +819,7 @@ export default function Home() {
                       htmlFor="pdf-file-input"
                       className="px-4 py-2 rounded-full text-sm font-medium cursor-pointer transition-all duration-200 shadow-md hover:shadow-lg"
                       style={{ 
-                        background: "linear-gradient(135deg, #BC1E70, #0B64DD)", 
+                        background: "#0B64DD", 
                         color: "white" 
                       }}
                     >
