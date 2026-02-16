@@ -6,6 +6,12 @@ import Markdown from "react-markdown";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
+interface AgentChatProps {
+  initialMessages?: Message[];
+  onMessagesChange?: (messages: Message[]) => void;
+  conversationId?: string | null;
+}
+
 function AddToNotesButton({ content }: { content: string }) {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -51,12 +57,16 @@ function AddToNotesButton({ content }: { content: string }) {
   );
 }
 
-export default function AgentChat() {
-  const [messages, setMessages] = useState<Message[]>([]);
+export default function AgentChat({ initialMessages = [], onMessagesChange, conversationId }: AgentChatProps) {
+  const [messages, setMessages] = useState<Message[]>(initialMessages);
   const [inputValue, setInputValue] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    setMessages(initialMessages);
+  }, [initialMessages]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -65,6 +75,12 @@ export default function AgentChat() {
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
+
+  useEffect(() => {
+    if (onMessagesChange) {
+      onMessagesChange(messages);
+    }
+  }, [messages, onMessagesChange]);
 
   const handleSendMessage = async () => {
     if (!inputValue.trim() || isLoading) return;
@@ -83,12 +99,17 @@ export default function AgentChat() {
     setMessages(prev => [...prev, { role: "assistant", content: "" }]);
 
     try {
+      const requestBody: { input: string; conversation_id?: string } = { input: inputValue.trim() };
+      if (conversationId) {
+        requestBody.conversation_id = conversationId;
+      }
+      
       const response = await fetch('/api/agent-chat', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ input: inputValue.trim() }),
+        body: JSON.stringify(requestBody),
       });
 
       if (!response.ok) {

@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { apiService, Course, NoteResponse, FolderResponse } from "@/services/api";
 import AgentChat from "@/components/AgentChat";
+import { Message } from "@/services/api";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -18,7 +19,7 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import ReactMarkdown from "react-markdown";
 
-type TabType = "slides" | "upload" | "addCourse" | "notes";
+type TabType = "slides" | "upload" | "addCourse" | "notes" | "chatHistory";
 
 interface SlideData {
   id: string;
@@ -36,7 +37,8 @@ const colorTabs = [
   { id: "slides" as TabType, label: "Slides", color: "#0B64DD" },
   { id: "upload" as TabType, label: "Upload", color: "#BC1E70" },
   { id: "addCourse" as TabType, label: "Add Course", color: "#008B87" },
-  { id: "notes" as TabType, label: "Notes", color: "#008A5E" }
+  { id: "notes" as TabType, label: "Notes", color: "#008A5E" },
+  { id: "chatHistory" as TabType, label: "Chat History", color: "#6B21A8" }
 ];
 
 export default function Home() {
@@ -48,6 +50,11 @@ export default function Home() {
   const [success, setSuccess] = useState<string | null>(null);
   const [showLeftNav, setShowLeftNav] = useState(true);
   const [showAgentChat, setShowAgentChat] = useState(true);
+
+  const [conversations, setConversations] = useState<{ id: string; title: string; updated_at: string }[]>([]);
+  const [conversationsLoading, setConversationsLoading] = useState(false);
+  const [selectedConversationId, setSelectedConversationId] = useState<string | null>(null);
+  const [selectedConversationMessages, setSelectedConversationMessages] = useState<Message[]>([]);
 
   const [courses, setCourses] = useState<CourseWithSlides[]>([]);
   const [slidesData, setSlidesData] = useState<{ [key: string]: SlideData[] }>({});
@@ -88,12 +95,16 @@ export default function Home() {
 
   useEffect(() => {
     fetchCourses();
+    fetchConversations();
   }, []);
 
   useEffect(() => {
     if (activeTab === "notes") {
       fetchNotes();
       fetchFolders();
+    }
+    if (activeTab === "chatHistory") {
+      fetchConversations();
     }
   }, [activeTab]);
 
@@ -221,6 +232,85 @@ export default function Home() {
       setError(err instanceof Error ? err.message : "Failed to fetch notes");
     } finally {
       setNotesLoading(false);
+    }
+  };
+
+  const fetchConversations = async () => {
+    try {
+      setConversationsLoading(true);
+      const response = await fetch('/api/agent_builder/conversations');
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Failed to fetch conversations: ${response.status} - ${errorText}`);
+      }
+      const data = await response.json();
+      setConversations(data.results || []);
+    } catch (err) {
+      console.error('Failed to fetch conversations:', err);
+      setError(err instanceof Error ? err.message : "Failed to fetch conversations");
+      setConversations([]);
+    } finally {
+      setConversationsLoading(false);
+    }
+  };
+
+  const fetchConversationMessages = async (conversationId: string) => {
+    try {
+      const response = await fetch(`/api/agent_builder/conversations/${conversationId}`);
+      if (!response.ok) {
+        throw new Error('Failed to fetch conversation messages');
+      }
+      const data = await response.json();
+      
+      const messages: Message[] = [];
+      const rounds = data.rounds || [];
+      
+      for (const round of rounds) {
+        if (round.input?.message) {
+          messages.push({
+            role: 'user',
+            content: round.input.message
+          });
+        }
+        if (round.response?.message) {
+          messages.push({
+            role: 'assistant',
+            content: round.response.message
+          });
+        }
+      }
+      
+      setSelectedConversationMessages(messages);
+      setSelectedConversationId(conversationId);
+      setShowAgentChat(true);
+    } catch (err) {
+      console.error('Failed to fetch conversation messages:', err);
+      setError(err instanceof Error ? err.message : "Failed to load conversation");
+    }
+  };
+
+  const deleteConversation = async (conversationId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!confirm('Are you sure you want to delete this conversation?')) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/agent_builder/conversations/${conversationId}`, {
+        method: 'DELETE',
+      });
+      if (!response.ok) {
+        throw new Error('Failed to delete conversation');
+      }
+      setSuccess('Conversation deleted successfully!');
+      await fetchConversations();
+      if (selectedConversationId === conversationId) {
+        setSelectedConversationId(null);
+        setSelectedConversationMessages([]);
+      }
+    } catch (err) {
+      console.error('Failed to delete conversation:', err);
+      setError(err instanceof Error ? err.message : "Failed to delete conversation");
     }
   };
 
@@ -1207,6 +1297,73 @@ export default function Home() {
           </div>
         )}
 
+        {activeTab === "chatHistory" && (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-semibold" style={{ color: "oklch(0.985 0 0)" }}>Chat History</h2>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={fetchConversations}
+                style={{ borderColor: "oklch(1 0 0 / 15%)" }}
+              >
+                Refresh
+              </Button>
+            </div>
+            
+            {conversationsLoading ? (
+              <div className="text-muted-foreground">Loading conversations...</div>
+            ) : conversations.length === 0 ? (
+              <Card style={{ backgroundColor: "oklch(0.15 0 0)", borderColor: "oklch(1 0 0 / 10%)" }}>
+                <CardContent className="pt-6 text-center">
+                  <div className="text-muted-foreground">No chat history found. Start a conversation with the agent.</div>
+                </CardContent>
+              </Card>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {conversations.map((conversation) => (
+                  <Card
+                    key={conversation.id}
+                    className={`cursor-pointer hover:opacity-90 transition-all relative ${
+                      selectedConversationId === conversation.id ? 'ring-2' : ''
+                    }`}
+                    style={{ 
+                      backgroundColor: selectedConversationId === conversation.id ? "#6B21A8" : "oklch(0.15 0 0)", 
+                      borderColor: "oklch(1 0 0 / 10%)"
+                    }}
+                    onClick={() => fetchConversationMessages(conversation.id)}
+                  >
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={(e) => deleteConversation(conversation.id, e)}
+                      className="absolute top-2 right-2 transition-opacity h-8 w-8 p-0"
+                      style={{ color: "#C61E25" }}
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                      </svg>
+                    </Button>
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm truncate pr-6" style={{ color: "oklch(0.985 0 0)" }}>
+                        {conversation.title || 'Untitled Conversation'}
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="text-xs text-muted-foreground">
+                        {conversation.updated_at ? new Date(conversation.updated_at).toLocaleDateString() : 'No date'}
+                      </div>
+                      <div className="text-xs text-muted-foreground mt-1 truncate">
+                        ID: {conversation.id}
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
         {showAddToFolder && (
           <Dialog open={true} onOpenChange={() => setShowAddToFolder(null)}>
             <DialogContent style={{ backgroundColor: "oklch(0.15 0 0)" }}>
@@ -1250,7 +1407,7 @@ export default function Home() {
           className="w-125 border-l shrink-0"
           style={{ backgroundColor: "oklch(0.12 0 0)", borderColor: "oklch(1 0 0 / 10%)" }}
         >
-          <AgentChat />
+          <AgentChat key={selectedConversationId || 'new-chat'} initialMessages={selectedConversationMessages} conversationId={selectedConversationId} />
         </div>
       )}
       </div>
