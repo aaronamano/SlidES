@@ -1,6 +1,7 @@
-ELSER pipeline to convert text to sparse vector embeddings
+# ELSER pipeline to convert text to sparse vector embeddings
+I used Kibana Dev Tools to create and get the pipeline with the queries below.
 
-# Create Pipeline
+## Create Pipeline
 PUT _ingest/pipeline/elser-pipeline
 {
   "processors": [
@@ -18,5 +19,5 @@ PUT _ingest/pipeline/elser-pipeline
   ]
 }
 
-# Get Pipeline
+## Get Pipeline
 GET _ingest/pipeline/elser-pipeline

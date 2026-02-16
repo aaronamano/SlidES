@@ -1,23 +1,30 @@
 ## Problem
-During college, most professors I had classes with teach by using lecture slide materials. Lecture slides are the best sort of knowledge, but they can be disorganized in certain ways:
+Most college professors use lecture slides to teach, and many college students rely on lecture slides to study with. As a college student myself, I view lecture slides as a reliable source of content. However, there are multiple issues I face.
 
-- Personally, I had to download slides on Canvas, save it on my local computer, and try to look for it again in the midst of other files and documents I had -> **it was hard to organize my slides in one place**
-- Also, when I needed to look for certain topics or concepts from lecture slides, there were tons of information to go through -> **the endless amount of searching and scrolling killed time**
+- **Storing slides can be decentralized and unorganized:** Often, I would download lecture slides, and it would get lost with other files in my local computer, making it hard to manage and find.
+- **Manually searching and scrolling through slides:** Whenever I needed to look for certain information, I had to search and scroll through multiple slides because it was hard to find where exact information was located, which killed a lot of time.
 
 This is where SlidES comes in! I made the *-es* suffix capitalized to emphasize ElasticSearch aka ES :)
 
 ## What SlidES does
-It's a dashboard to upload and organize your lecture slides as PDF files. When you upload your PDF file, text is extracted from the file, stored using ElasticSearch’s index database, and embedded as sparse vectors through an Elser Pipeline.
+SlidES is a platform where you organize your lecture slides by uploading them as PDF files in a singular, centralized place. You can ask the SlidES Agent questions about information that you need from your lecture slides or generate notes. Using Elastic Search’s built-in agent search tool, it looks through slides in the index database, find relevant content, and responds with the information you need, which would take countless hours humans to do.
 
-You can ask the SlidES Agent questions about certain topics that you need to ask or generate notes for you, which you can copy as a markdown and create yourself. Using Elastic Search’s built-in agent search tool, it looks through slides in the index database, find the relevant content you need, and responds with that information to you.
+### Features
+- Upload lecture slides as PDF files and add them in a course
+- Create courses to group lecture slides
+- Create notes as markdown and add notes to folders
+- Create folders to group notes
+- View and delete chat conversation history
+- Chat to SlidES Agent (ElasticSearch Agent Builder)
+- Add and create the Agent’s response into notes
+
+### ElasticSearch features
+- **Index databases**: I used multiple index databases to store lecture slides, notes, and folders
+- **Agent Builder**: Using Agent Builder, I created my own agent and gave it instructions to only search for notes and lectures slides in the index databases in order to answer certain questions about it and generate notes
+- **Kibana API**: With Kibana’s API, I invoked my agent using the `/api/agent_builder/converse` endpoint which delivers real time streaming responses, which are rendered onto my UI. I also used the API to get all conversation history, get a conversation by ID, and delete a conversation by ID.
+- **Ingest Pipeline**: Using Kibana’s Dev Tools, I created an ingest pipeline using `.elser_model_2` to convert extracted text from lecture slide PDFs into sparse vectors
 
 ## How it’s built
 - **Frontend**: Next.js, Shadcn, Tailwind
 - **Backend**: FastAPI, Kibana API
 - **Database**: ElasticSearch’s index database, MongoDB (just to store course names and course IDs)
-
-## ElasticSearch features
-- **Index databases**: I used multiple index databases to store lecture slides, notes, and folders
-- **Agent Builder**: Using Agent Builder, I created my own agent and gave it instructions to only search for notes and lectures slides in the index databases in order to answer certain questions about it and generate notes
-- **Kibana API**: With Kibana’s API, I invoked my agent using the `/api/agent_builder/converse` endpoint which delivers real time streaming responses, which are rendered onto my UI
-- **Ingest Pipeline**: Using Kibana’s Dev Tools, I created an ingest pipeline using `.elser_model_2` to convert extracted text from lecture slide PDFs into sparse vectors
