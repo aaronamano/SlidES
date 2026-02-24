@@ -7,8 +7,8 @@ I enjoyed using the ElasticSearch Agent Builder where I was able to create my ag
 
 # Overview 
 1. Follow the instructions on how to set up the frontend and backend in the README files:
-[Frontend Instructions](frontend/FRONTEND.md)
-[Backend Instructions](backend/BACKEND.md)
+- [Frontend Instructions](frontend/FRONTEND.md)
+- [Backend Instructions](backend/BACKEND.md)
 
 2. You can see all information related to ElasticSearch such as Agent Prompt, Mappings, etc. under the folder directory `@/backend/elastic-search`:
 ```
@@ -20,8 +20,6 @@ I enjoyed using the ElasticSearch Agent Builder where I was able to create my ag
     ├── RESULT.md # example json response via Kibana API
     ├── SCHEMA.md # mappings of the ES index databases
     ├── SLIDES_AGENT.md # slides agent outline of the prompt, name, and description
-    ├── TEST.md
-    └── TEST2.md
 ```
 
 3. Note that to test the application on development, run the backend and the frontend simultaneously in separate terminals
