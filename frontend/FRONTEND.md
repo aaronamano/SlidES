@@ -57,6 +57,7 @@ pnpm run dev
             ├── utils.ts
         └── services
             ├── api.ts
+    ├── .env.example
     ├── .gitignore
     ├── components.json
     ├── eslint.config.mjs
