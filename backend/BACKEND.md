@@ -1,4 +1,6 @@
-# Set up backend
+## Set up backend
+
+1. go to the backend, create a conda environment, and install pip dependencies in the conda environment by running these commands:
 
 ```bash
 cd backend
@@ -7,83 +9,39 @@ conda activate slides-env
 pip install -r requirements.txt
 ```
 
-# Run Python API
+2. create a `.env` file under the `backend` root directory and add these variables:
+
+```text
+ELASTICSEARCH_URL=...
+ELASTICSEARCH_API_KEY="..."
+KIBANA_URL=...
+```
+*refer to `@/backend/.env.example`*
+
+3. run the API in the conda environment using these commands:
 
 ```bash
 conda activate slides-env
-python api.py
+python main.py
 ```
 
-# Elastic Search Index DB Schema
-## Lecture Slides Index
-```json
-{
-    "course_id": { "type": "keyword" },
-    "course_name": { "type": "text" },
-    "filename": { "type": "keyword" },
-    "title": { "type": "text" },
-    "text_content": { "type": "text" },
-    "text_embedding": { "type": "sparse_vector" },
-    "pdf_binary": {
-        "type": "binary",
-        "store": True,
-        "doc_values": False
-    },
-    "pdf_size": { "type": "long" },
-    "has_binary": { "type": "boolean" }
-}
-```
+## Folder Structure
 
-## Notes Index
-```json
-{
-  "title": { "type": "text", "fields": { "keyword": { "type": "keyword" } } },
-  "notes": { "type": "text" },
-  "folder_id": { "type": "keyword" },
-  "created_at": { "type": "date" },
-  "updated_at": { "type": "date" }
-}
-```
-
-## Folders Index
-```json
-{
-  "folder_name": {
-    "type": "text",
-    "fields": { "keyword": { "type": "keyword" } }
-  },
-  "created_at": { "type": "date" },
-  "updated_at": { "type": "date" }
-}
-```
-
-# Folder Structure
 ```
 └── backend
     └── elastic-search
+        ├── courses-init.py
         ├── lecture-slides-init.py
         ├── notes-folders-init.py
         ├── PIPELINE.md
         ├── RESULT.md
+        ├── SLIDES_AGENT.md
+    ├── .env.example
     ├── .gitignore
-    ├── api.py
     ├── BACKEND.md
     ├── course_service.py
     ├── folder_service.py
-    ├── mongo_client.py
+    ├── main.py
     ├── note_service.py
     └── requirements.txt
-```
-
-# Process
-import PDF file ➡️ extract text ➡️ embed text to sparse vectors ➡️ add extracted text to `text_content` as a string and add vector embeddings to `text_embedding`
-
-# MongoDB
-## Courses Collection
-
-```typescript
-{
-  "course_id": string,
-  "course_name": string,
-}
 ```

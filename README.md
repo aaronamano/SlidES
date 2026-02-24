@@ -1,33 +1,27 @@
-## Problem
-Most college professors use lecture slides to teach, and many college students rely on lecture slides to study with. As a college student myself, I view lecture slides as a reliable source of content. However, there are multiple issues I face.
+# Summary
+As a college student, I use lecture slides to study because most of my professors use them to teach, but I face multiple problems. The first problem was that there was no centralized place to store slides. Often, I would download lecture slides, and it would get stored with other files and documents in my local computer, which becomes messy and disorganized. The other problem was that manual searching and scrolling was time-consuming. Whenever I needed to look for certain information, I had to search and scroll through multiple slides, which killed a lot of time. This is why I created SlidES, a platform to organize your lecture slides in a singular place and leverage the SlidES agent to search for information you need that would take countless hours for a human to do. 
 
-- **Storing slides can be decentralized and unorganized:** Often, I would download lecture slides, and it would get lost with other files in my local computer, making it hard to manage and find.
-- **Manually searching and scrolling through slides:** Whenever I needed to look for certain information, I had to search and scroll through multiple slides because it was hard to find where exact information was located, which killed a lot of time.
+There are many features that I implemented in SlidES. A primary feature I implemented was uploading slides as PDF files, extracting its text, and storing them using ElasticSearch’s index database. Under the hood I used the Elser Pipeline to embed the PDF file’s extracted text into sparse vectors. Another notable feature I implemented was a chat interface to interact with my own SlidES Agent that I built using ElasticSearch’s Agent Builder through the Kibana API. My SlidES Agent had two main roles, generate notes and answer questions, by searching through the user’s uploaded slides using ElasticSearch’s built-in agent tools, mainly the platform.core.search tool. There were also minor features such as viewing conversation history while asking follow up questions, creating notes and folders, creating courses, especially adding the Agent’s response into your notes.
 
-This is where SlidES comes in! I made the *-es* suffix capitalized to emphasize ElasticSearch aka ES :)
+I enjoyed using the ElasticSearch Agent Builder where I was able to create my agent with full control and give it prompts. I also liked how I was able to interact and test my agent in ElasticSearch’s interface, and I enjoyed using their built-in tools because it was easy to use and plug in for my agent. Additionally, I enjoyed using the Kibana API since it helped interact with my ElasticSearch agent, and I was able to create a UI from it.
 
-## What SlidES does
-SlidES is a platform where you organize your lecture slides by uploading them as PDF files in a singular, centralized place. You can ask the SlidES Agent questions about information that you need from your lecture slides or generate notes. Using Elastic Search’s built-in agent search tool, it looks through slides in the index database, find relevant content, and responds with the information you need, which would take countless hours humans to do.
+# Overview 
+1. Follow the instructions on how to set up the frontend and backend in the README files:
+[Frontend Instructions](frontend/FRONTEND.md)
+[Backend Instructions](backend/BACKEND.md)
 
-### Features
-- Upload lecture slides as PDF files and add them in a course (optional)
-- Create courses to group lecture slides
-- Move uploaded lectures to created, existing courses
-- Edit and delete courses
-- Create notes as markdown and add notes to folders
-- Create folders to group notes
-- Edit and delete folders
-- View and delete chat conversation history
-- Chat to SlidES Agent (ElasticSearch Agent Builder)
-- Add and create the Agent’s response into notes
+2. You can see all information related to ElasticSearch such as Agent Prompt, Mappings, etc. under the folder directory `@/backend/elastic-search`:
+```
+└── elastic-search
+    ├── courses-init.py # courses index mapping
+    ├── lecture-slides-init.py # lecture slides index mapping
+    ├── notes-folders-init.py # notes and folders mappings
+    ├── PIPELINE.md # pipeline to converting text to sparse vectors
+    ├── RESULT.md # example json response via Kibana API
+    ├── SCHEMA.md # mappings of the ES index databases
+    ├── SLIDES_AGENT.md # slides agent outline of the prompt, name, and description
+    ├── TEST.md
+    └── TEST2.md
+```
 
-### ElasticSearch features
-- **Index databases**: I used multiple index databases to store lecture slides, courses, notes, and folders
-- **Agent Builder**: Using Agent Builder, I created my own agent and gave it instructions to only search for notes and lectures slides in the index databases in order to answer certain questions about it and generate notes
-- **Kibana API**: With Kibana’s API, I invoked my agent using the `/api/agent_builder/converse` endpoint which delivers real time streaming responses, which are rendered onto my UI. I also used the API to get all conversation history, get a conversation by ID, and delete a conversation by ID.
-- **Ingest Pipeline**: Using Kibana’s Dev Tools, I created an ingest pipeline using `.elser_model_2` to convert extracted text from lecture slide PDFs into sparse vectors
-
-## How it’s built
-- **Frontend**: Next.js, Shadcn, Tailwind
-- **Backend**: FastAPI, Kibana API
-- **Database**: ElasticSearch’s index database
+3. Note that to test the application on development, run the backend and the frontend simultaneously in separate terminals

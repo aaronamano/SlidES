@@ -1,16 +1,25 @@
-# Set up frontend
+## Set up frontend
+1. go to the frontend and install node dependencies by running these commands:
 ```bash
 cd frontend
 pnpm install
-pnpm run dev
 ```
 
-# Run UI
+2. create a `.env` file under the `frontend` root directory and add these variables:
+```text
+ELASTICSEARCH_API_KEY="..."
+KIBANA_URL=...
+NEXT_PUBLIC_ELASTICSEARCH_URL=...
+FASTAPI_URL=... # set it to http://localhost:8000 for development
+```
+*refer to `@/frontend/.env.example`*
+
+3. run the UI using the command:
 ```bash
 pnpm run dev
 ```
 
-# Folder Structure
+## Folder Structure
 ```
 └── frontend
     └── public
@@ -22,6 +31,11 @@ pnpm run dev
     └── src
         └── app
             └── api
+                └── agent_builder
+                    └── conversations
+                        └── [conversation_id]
+                            ├── route.ts
+                        ├── route.ts
                 └── agent-chat
                     ├── route.ts
             ├── favicon.ico
